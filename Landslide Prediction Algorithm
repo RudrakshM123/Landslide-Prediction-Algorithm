@@ -1,0 +1,156 @@
+from sklearn.tree import export_graphviz
+import pydot
+import csv
+import numpy as np
+import os
+from PIL import Image
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import image
+from sklearn.tree import plot_tree
+from osgeo import gdal
+from sklearn.model_selection import train_test_split
+import numpy as np
+import os
+from PIL import Image
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import image
+from sklearn.neural_network import MLPRegressor
+from osgeo import gdal
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn import metrics
+from sklearn.metrics import RocCurveDisplay
+from sklearn.inspection import permutation_importance
+import time
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
+import rasterio
+from rasterio.plot import show
+from osgeo import gdal
+from sklearn import metrics
+
+start = time.time()
+
+
+X1 = np.array(pd.read_csv("filepath for lith_full.csv"))
+X1a = X1[:,2]
+X2 = np.array(pd.read_csv("filepath for aspect2_full.csv"))
+X2a = X2[:,2]
+X3 = np.array(pd.read_csv("filepath for waterway.csv"))
+X3a = X3[:,2]
+X4 = np.array(pd.read_csv("filepath for landforms_full.csv"))
+X4a = X4[:,2]
+X5 = np.array(pd.read_csv("filepath for roads2.csv"))
+X5a = X5[:,2]
+X6 = np.array(pd.read_csv("filepath for sldg2_full.csv"))
+X6a = X6[:,2]
+X7 = np.array(pd.read_csv("filepath for lulc_full.csv"))
+X7a = X7[:,2]
+X8 = np.array(pd.read_csv("filepath for rainfall3.csv"))
+X8a = X8[:, 2]
+X9 = np.array(pd.read_csv("filepath for landslidepoly.csv"))
+X9a = X9[:, 2]
+
+Xrainfall = np.array(pd.read_csv("filepath for rainfall_predicted.csv"))
+Xrainfalla = Xrainfall[:, 2]
+
+X10 = np.array(pd.read_csv("filepath for suscept2_full.csv"))
+X10a = X10[:,2]
+
+
+
+
+X = np.array([X1a, X2a, X3a, X4a, X5a, X6a, X7a, X8a, X9a])
+print(np.shape(X10a))
+Xa = X.T
+print(np.shape(Xa))
+
+
+X_train = Xa[0:3335251, 0:9]
+X_test = Xa[3335251:4435251, 0:9]
+y_train = X10a[0:3335251]
+y_test = X10a[3335251:4435251]
+oy_test = X10[3335251:4435251, 0:3]
+
+
+mod = ExtraTreesClassifier(n_estimators= 300, max_depth=(20), criterion = "entropy", min_samples_split = 5).fit(X_train, y_train)
+y_pred = mod.predict(X_test)
+y_finalpred = y_pred
+
+
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_finalpred, pos_label=2)
+print("AUC:", metrics.auc(fpr, tpr))
+
+
+
+
+
+
+
+print(mod.score(X_test, y_test))
+print("MAE:", mean_absolute_error(y_test, y_pred))
+print(y_pred)
+print(y_finalpred)
+print(y_test)
+print("MAE After rounding off:", mean_absolute_error(y_test, y_finalpred))
+features = ["lith", "aspct", "wtrwy", "lndfrm", "rds", "sldg", "llc", "rnfll", "lndsld"]
+
+fig = plt.figure(figsize=(75, 50))
+plot_tree(mod.estimators_[0], max_depth = 2, feature_names = features)
+plt.show()
+fig2 = plt.figure(figsize=(75, 50))
+plot_tree(mod.estimators_[10], max_depth = 2, feature_names = features)
+plt.show()
+print()
+print("features:", features)
+print()
+print("MSE after rounding off:", mean_squared_error(y_test, y_finalpred))
+print()
+importance = mod.feature_importances_
+# summarize feature importance
+for i,v in enumerate(importance):
+	print('Feature: %0d, Score: %.5f' % (i,v))
+# plot feature importance
+plt.bar(features, importance)
+plt.show()
+
+X_remove = np.delete(oy_test, 2, 1)
+output = np.column_stack((X_remove, y_finalpred))
+houtput = np.column_stack((X_remove, y_test))
+
+np.savetxt("EXTOutput2.xyz", output)
+ds = gdal.Translate("EXTOutput2_Classifier.tif", "EXTOutput2.xyz", outputSRS = "EPSG:32643")
+np.savetxt("StatisticalOutput2.xyz", houtput)
+da = gdal.Translate("StatisticalOutput2_Classifier.tif", "StatisticalOutput2.xyz", outputSRS = "EPSG:32643")
+
+X_prediction = np.array([X1a, X2a, X3a, X4a, X5a, X6a, X7a, Xrainfalla, X9a]) 
+X_predictiona = X_prediction.T
+print(np.shape(X_predictiona))
+X_pred =  X_predictiona[3335251:4435251, 0:9]
+
+
+y_pred = mod.predict(X_pred)
+y_finalpred = np.rint(y_pred)
+
+prediction = np.column_stack((X_remove, y_finalpred))
+
+
+np.savetxt("EXT 2030 Prediction2.xyz", prediction)
+ds = gdal.Translate("EXT 2030 Prediction2_Classifier.tif", "EXT 2030 Prediction2.xyz", outputSRS = "EPSG:32643")
+
+end = time.time()
+
+print("Time:", end - start)
+
+fp1 = r"filepath for EXTOutput2_Classifier.tif"
+raster = rasterio.open(fp1)
+show(raster)
+
+fp2 = r"filepath for StatisticalOutput2_Classifier.tif"
+raster = rasterio.open(fp2)
+show(raster)
+
+fp3 = r"filepath for EXT 2030 Prediction2_Classifier.tif"
+raster = rasterio.open(fp3)
+show(raster)
